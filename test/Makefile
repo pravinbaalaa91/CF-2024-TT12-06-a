@@ -13,7 +13,8 @@ TOPLEVEL_LANG   ?= verilog
 SRC_DIR         = $(PWD)/../src
 
 # Project source files
-PROJECT_SOURCES = tt_um_TT06_pwm.v
+PROJECT_SOURCES = pwm.v tt_um_TT06_pwm.v
+
 
 # ------------------------
 # RTL vs Gate-Level build
