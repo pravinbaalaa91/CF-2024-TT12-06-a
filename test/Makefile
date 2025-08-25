@@ -1,61 +1,44 @@
-# ================================================================
-# Makefile for cocotb testbench
-# See: https://docs.cocotb.org/en/stable/quickstart.html
-# ================================================================
+# Makefile
+# See https://docs.cocotb.org/en/stable/quickstart.html for more info
 
-# ------------------------
-# Defaults
-# ------------------------
-SIM             ?= icarus
-TOPLEVEL_LANG   ?= verilog
+# defaults
+SIM ?= icarus
+TOPLEVEL_LANG ?= verilog
+SRC_DIR = $(PWD)/../src
+PROJECT_SOURCES = tt_um_TT06_pwm.v
 
-# Source directory
-SRC_DIR         = $(PWD)/../src
+ifneq ($(GATES),yes)
 
-# Project source files
-PROJECT_SOURCES = pwm.v tt_um_TT06_pwm.v
+# RTL simulation:
+SIM_BUILD				= sim_build/rtl
+VERILOG_SOURCES += $(addprefix $(SRC_DIR)/,$(PROJECT_SOURCES))
 
+else
 
-# ------------------------
-# RTL vs Gate-Level build
-# ------------------------
-ifneq ($(GATES), yes)     # RTL simulation
-    SIM_BUILD        = sim_build/rtl
-    VERILOG_SOURCES += $(addprefix $(SRC_DIR)/,$(PROJECT_SOURCES))
+# Gate level simulation:
+SIM_BUILD				= sim_build/gl
+COMPILE_ARGS    += -DGL_TEST
+COMPILE_ARGS    += -DFUNCTIONAL
+COMPILE_ARGS    += -DUSE_POWER_PINS
+COMPILE_ARGS    += -DSIM
+COMPILE_ARGS    += -DUNIT_DELAY=\#1
+VERILOG_SOURCES += $(PDK_ROOT)/sky130A/libs.ref/sky130_fd_sc_hd/verilog/primitives.v
+VERILOG_SOURCES += $(PDK_ROOT)/sky130A/libs.ref/sky130_fd_sc_hd/verilog/sky130_fd_sc_hd.v
 
-else                      # Gate-level simulation
-    SIM_BUILD        = sim_build/gl
+# this gets copied in by the GDS action workflow
+VERILOG_SOURCES += $(PWD)/gate_level_netlist.v
 
-    COMPILE_ARGS    += -DGL_TEST
-    COMPILE_ARGS    += -DFUNCTIONAL
-    COMPILE_ARGS    += -DUSE_POWER_PINS
-    COMPILE_ARGS    += -DSIM
-    COMPILE_ARGS    += -DUNIT_DELAY=\#1
-
-    VERILOG_SOURCES += $(PDK_ROOT)/sky130A/libs.ref/sky130_fd_sc_hd/verilog/primitives.v
-    VERILOG_SOURCES += $(PDK_ROOT)/sky130A/libs.ref/sky130_fd_sc_hd/verilog/sky130_fd_sc_hd.v
-
-    # This gets copied in by the GDS action workflow
-    VERILOG_SOURCES += $(PWD)/gate_level_netlist.v
 endif
 
-# ------------------------
-# Common Configuration
-# ------------------------
-# Allow sharing config between design and testbench via include
-COMPILE_ARGS    += -I$(SRC_DIR)
+# Allow sharing configuration between design and testbench via `include`:
+COMPILE_ARGS 		+= -I$(SRC_DIR)
 
-# Include testbench source
+# Include the testbench sources:
 VERILOG_SOURCES += $(PWD)/tb.v
+TOPLEVEL = tb
 
-# ------------------------
-# cocotb setup
-# ------------------------
-# TOPLEVEL is the HDL module to be instantiated (tb is your testbench)
-TOPLEVEL        = tb
+# MODULE is the basename of the Python test file
+MODULE = test
 
-# MODULE is the Python file (test.py → MODULE = test)
-MODULE          = test
-
-# Include cocotb's make rules to take care of simulator setup
+# include cocotb's make rules to take care of the simulator setup
 include $(shell cocotb-config --makefiles)/Makefile.sim
