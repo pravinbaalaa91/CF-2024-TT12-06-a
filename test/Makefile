@@ -1,53 +1,60 @@
-# ===============================
-# Makefile for RTL & GLS (Verilog testbench)
-# ===============================
+# ================================================================
+# Makefile for cocotb testbench
+# See: https://docs.cocotb.org/en/stable/quickstart.html
+# ================================================================
 
-# Simulator
-SIM ?= icarus
+# ------------------------
+# Defaults
+# ------------------------
+SIM             ?= icarus
+TOPLEVEL_LANG   ?= verilog
 
 # Source directory
-SRC_DIR = $(PWD)/../src
+SRC_DIR         = $(PWD)/../src
 
-# RTL sources
-PROJECT_SOURCES = $(SRC_DIR)/tt_um_TT06_pwm.v $(SRC_DIR)/pwm.v
+# Project source files
+PROJECT_SOURCES = tt_um_TT06_pwm.v
 
-# Testbench
-TB = $(PWD)/tb.v
+# ------------------------
+# RTL vs Gate-Level build
+# ------------------------
+ifneq ($(GATES), yes)     # RTL simulation
+    SIM_BUILD        = sim_build/rtl
+    VERILOG_SOURCES += $(addprefix $(SRC_DIR)/,$(PROJECT_SOURCES))
 
-# Gate-level netlist
-GL_NETLIST = $(PWD)/gate_level_netlist.v
+else                      # Gate-level simulation
+    SIM_BUILD        = sim_build/gl
 
-# Output file
-OUT = sim.out
+    COMPILE_ARGS    += -DGL_TEST
+    COMPILE_ARGS    += -DFUNCTIONAL
+    COMPILE_ARGS    += -DUSE_POWER_PINS
+    COMPILE_ARGS    += -DSIM
+    COMPILE_ARGS    += -DUNIT_DELAY=\#1
 
-# Sky130 PDK paths
-PDK = $(PDK_ROOT)/sky130A/libs.ref/sky130_fd_sc_hd/verilog
-GL_LIBS = $(PDK)/primitives.v $(PDK)/sky130_fd_sc_hd.v
+    VERILOG_SOURCES += $(PDK_ROOT)/sky130A/libs.ref/sky130_fd_sc_hd/verilog/primitives.v
+    VERILOG_SOURCES += $(PDK_ROOT)/sky130A/libs.ref/sky130_fd_sc_hd/verilog/sky130_fd_sc_hd.v
 
-# GLS compile defines
-GL_DEFINES = -DGL_TEST -DFUNCTIONAL -DUSE_POWER_PINS -DSIM -DUNIT_DELAY=\#1
+    # This gets copied in by the GDS action workflow
+    VERILOG_SOURCES += $(PWD)/gate_level_netlist.v
+endif
 
-# ===============================
-# Targets
-# ===============================
+# ------------------------
+# Common Configuration
+# ------------------------
+# Allow sharing config between design and testbench via include
+COMPILE_ARGS    += -I$(SRC_DIR)
 
-# Default: RTL simulation
-all: rtl
+# Include testbench source
+VERILOG_SOURCES += $(PWD)/tb.v
 
-# RTL simulation
-rtl:
-	@echo "Running RTL simulation..."
-	iverilog -o $(OUT) $(PROJECT_SOURCES) $(TB)
-	vvp $(OUT)
+# ------------------------
+# cocotb setup
+# ------------------------
+# TOPLEVEL is the HDL module to be instantiated (tb is your testbench)
+TOPLEVEL        = tb
 
-# Gate-level simulation
-gl:
-	@echo "Running Gate-Level simulation..."
-	iverilog -o $(OUT) $(GL_DEFINES) $(GL_LIBS) $(GL_NETLIST) $(TB)
-	vvp $(OUT)
+# MODULE is the Python file (test.py → MODULE = test)
+MODULE          = test
 
-# Clean
-clean:
-	rm -f $(OUT) tb.vcd
-
-.PHONY: all rtl gl clean
+# Include cocotb's make rules to take care of simulator setup
+include $(shell cocotb-config --makefiles)/Makefile.sim
