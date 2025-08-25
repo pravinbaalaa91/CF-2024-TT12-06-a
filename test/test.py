@@ -1,66 +1,66 @@
 import cocotb
+from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge, Timer
 import random
 
 
 @cocotb.test()
-async def test_project(dut):
-    """PWM Testbench"""
+async def pwm_basic_test(dut):
+    """Basic sanity test for PWM module with special >100 duty rule"""
+    cocotb.start_soon(Clock(dut.clk, 10, units="ns").start())  # 100 MHz clock
 
-    cocotb.log.info("Start PWM test")
+    # Reset
+    dut.rst.value = 1
+    await Timer(20, units="ns")
+    dut.rst.value = 0
+    await RisingEdge(dut.clk)
 
-    # Reset sequence
-    dut.rst_n.value = 0
-    dut.clk.value = 0
-    await Timer(10, units="ns")
-    dut.rst_n.value = 1
-    await Timer(10, units="ns")
+    # Apply some fixed duty cycle values
+    for duty in [0, 50, 100, 120, 200]:
+        dut.duty.value = duty
+        await Timer(500, units="ns")
 
-    # Clock generator
-    async def clock_gen():
-        while True:
-            dut.clk.value = 0
-            await Timer(5, units="ns")
-            dut.clk.value = 1
-            await Timer(5, units="ns")
+        if duty > 100:
+            # Expect always HIGH
+            for _ in range(50):
+                await RisingEdge(dut.clk)
+                assert dut.pwm_out.value == 1, f"Expected PWM=1 for duty>{duty}, but got {dut.pwm_out.value}"
+        else:
+            cocotb.log.info(f"[BASIC TEST] Duty={duty}, PWM Out={int(dut.pwm_out.value)}")
 
-    cocotb.start_soon(clock_gen())
 
-    # ---- Test 0% duty ----
-    dut.ui_in.value = 0b0000000  # dc = 0
-    await Timer(2000, units="ns")
-    assert dut.uo_out[0].value == 0, "PWM should stay LOW at 0% duty"
+@cocotb.test()
+async def pwm_random_test(dut):
+    """Randomized test for PWM module including >100 duty special rule"""
+    cocotb.start_soon(Clock(dut.clk, 10, units="ns").start())  # 100 MHz clock
 
-    # ---- Test 100% duty ----
-    dut.ui_in.value = 0b1100100  # 100 in decimal, dc = 100
-    await Timer(2000, units="ns")
-    assert dut.uo_out[0].value == 1, "PWM should stay HIGH at 100% duty"
+    # Reset
+    dut.rst.value = 1
+    await Timer(20, units="ns")
+    dut.rst.value = 0
+    await RisingEdge(dut.clk)
 
-    # ---- Test 50% duty ----
-    dut.ui_in.value = 50  # 50% duty
-    high_count = 0
-    total_cycles = 200
+    for i in range(10):  # 10 random cases per run
+        duty = random.randint(0, 255)
+        dut.duty.value = duty
+        await Timer(1000, units="ns")
 
-    for _ in range(total_cycles):
-        await RisingEdge(dut.clk)
-        if dut.uo_out[0].value == 1:
-            high_count += 1
+        if duty > 100:
+            # Must stay HIGH always
+            for _ in range(50):
+                await RisingEdge(dut.clk)
+                assert dut.pwm_out.value == 1, f"Expected always HIGH for duty={duty}, but got {dut.pwm_out.value}"
+            cocotb.log.info(f"[RANDOM TEST] Duty={duty}, Output always HIGH as expected")
+        else:
+            # Normal PWM behavior → check duty ratio
+            high_count = 0
+            total_cycles = 128
+            for _ in range(total_cycles):
+                await RisingEdge(dut.clk)
+                if dut.pwm_out.value.integer == 1:
+                    high_count += 1
 
-    duty_measured = (high_count / total_cycles) * 100
-    assert 40 <= duty_measured <= 60, f"Expected ~50% duty, got {duty_measured:.2f}%"
-
-    # ---- Randomized test for robustness ----
-    for _ in range(5):
-        dc = random.randint(1, 99)
-        dut.ui_in.value = dc
-        high_count = 0
-        total_cycles = 300
-        for _ in range(total_cycles):
-            await RisingEdge(dut.clk)
-            if dut.uo_out[0].value == 1:
-                high_count += 1
-        duty_measured = (high_count / total_cycles) * 100
-        expected = dc
-        assert abs(duty_measured - expected) < 15, f"Duty mismatch: expected ~{expected}%, got {duty_measured:.2f}%"
-
-    cocotb.log.info("PWM test completed successfully")
+            expected_high = duty
+            error = abs(high_count - expected_high)
+            cocotb.log.info(f"[RANDOM TEST] Duty={duty}, HighCount={high_count}, Expected≈{expected_high}")
+            assert error <= 2, f"PWM mismatch: duty={duty}, got high_count={high_count}, expected≈{expected_high}"
