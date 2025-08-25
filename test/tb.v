@@ -27,7 +27,7 @@ module tb ();
 `endif
 
   // Instantiate your design
-  pwm user_project (
+  tt_um_TT06_pwm user_project (
 
       // Include power ports for the Gate Level test:
 `ifdef GL_TEST
