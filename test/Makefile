@@ -1,66 +1,45 @@
-import cocotb
-from cocotb.clock import Clock
-from cocotb.triggers import RisingEdge, Timer
-import random
+# Makefile
+# See https://docs.cocotb.org/en/stable/quickstart.html for more info
+
+# defaults
+SIM ?= icarus
+TOPLEVEL_LANG ?= verilog
+SRC_DIR = $(PWD)/../src
+PROJECT_SOURCES = pwm.v tt_um_TT06_pwm.v   # <-- add pwm.v here
+
+ifneq ($(GATES),yes)
+
+# RTL simulation:
+SIM_BUILD = sim_build/rtl
+VERILOG_SOURCES += $(addprefix $(SRC_DIR)/,$(PROJECT_SOURCES))
 
 
-@cocotb.test()
-async def pwm_basic_test(dut):
-    """Basic sanity test for PWM module with special >100 duty rule"""
-    cocotb.start_soon(Clock(dut.clk, 10, units="ns").start())  # 100 MHz clock
+else
 
-    # Reset
-    dut.rst.value = 1
-    await Timer(20, units="ns")
-    dut.rst.value = 0
-    await RisingEdge(dut.clk)
+# Gate level simulation:
+SIM_BUILD				= sim_build/gl
+COMPILE_ARGS    += -DGL_TEST
+COMPILE_ARGS    += -DFUNCTIONAL
+COMPILE_ARGS    += -DUSE_POWER_PINS
+COMPILE_ARGS    += -DSIM
+COMPILE_ARGS    += -DUNIT_DELAY=\#1
+VERILOG_SOURCES += $(PDK_ROOT)/sky130A/libs.ref/sky130_fd_sc_hd/verilog/primitives.v
+VERILOG_SOURCES += $(PDK_ROOT)/sky130A/libs.ref/sky130_fd_sc_hd/verilog/sky130_fd_sc_hd.v
 
-    # Apply some fixed duty cycle values
-    for duty in [0, 50, 100, 120, 200]:
-        dut.duty.value = duty
-        await Timer(500, units="ns")
+# this gets copied in by the GDS action workflow
+VERILOG_SOURCES += $(PWD)/gate_level_netlist.v
 
-        if duty > 100:
-            # Expect always HIGH
-            for _ in range(50):
-                await RisingEdge(dut.clk)
-                assert dut.pwm_out.value == 1, f"Expected PWM=1 for duty>{duty}, but got {dut.pwm_out.value}"
-        else:
-            cocotb.log.info(f"[BASIC TEST] Duty={duty}, PWM Out={int(dut.pwm_out.value)}")
+endif
 
+# Allow sharing configuration between design and testbench via `include`:
+COMPILE_ARGS 		+= -I$(SRC_DIR)
 
-@cocotb.test()
-async def pwm_random_test(dut):
-    """Randomized test for PWM module including >100 duty special rule"""
-    cocotb.start_soon(Clock(dut.clk, 10, units="ns").start())  # 100 MHz clock
+# Include the testbench sources:
+VERILOG_SOURCES += $(PWD)/tb.v
+TOPLEVEL = tb
 
-    # Reset
-    dut.rst.value = 1
-    await Timer(20, units="ns")
-    dut.rst.value = 0
-    await RisingEdge(dut.clk)
+# MODULE is the basename of the Python test file
+MODULE = test
 
-    for i in range(10):  # 10 random cases per run
-        duty = random.randint(0, 255)
-        dut.duty.value = duty
-        await Timer(1000, units="ns")
-
-        if duty > 100:
-            # Must stay HIGH always
-            for _ in range(50):
-                await RisingEdge(dut.clk)
-                assert dut.pwm_out.value == 1, f"Expected always HIGH for duty={duty}, but got {dut.pwm_out.value}"
-            cocotb.log.info(f"[RANDOM TEST] Duty={duty}, Output always HIGH as expected")
-        else:
-            # Normal PWM behavior → check duty ratio
-            high_count = 0
-            total_cycles = 128
-            for _ in range(total_cycles):
-                await RisingEdge(dut.clk)
-                if dut.pwm_out.value.integer == 1:
-                    high_count += 1
-
-            expected_high = duty
-            error = abs(high_count - expected_high)
-            cocotb.log.info(f"[RANDOM TEST] Duty={duty}, HighCount={high_count}, Expected≈{expected_high}")
-            assert error <= 2, f"PWM mismatch: duty={duty}, got high_count={high_count}, expected≈{expected_high}"
+# include cocotb's make rules to take care of the simulator setup
+include $(shell cocotb-config --makefiles)/Makefile.sim
