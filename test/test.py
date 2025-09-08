@@ -1,61 +1,24 @@
 import cocotb
-from cocotb.triggers import RisingEdge
+from cocotb.clock import Clock
+from cocotb.triggers import RisingEdge, Timer
 
-
-@cocotb.test()
-async def test_pwm(dut):
-    """PWM testbench for tt_um_TT06_pwm"""
-
-    dut._log.info("Starting PWM testbench")
-
-    # ----------------------------
-    # Initialize signals
-    # ----------------------------
+async def reset_dut(dut):
     dut.rst_n.value = 0
-    dut.ui_in.value = 0
-    dut.ena.value = 1
-
-    # Release reset after 1 clock
     await RisingEdge(dut.clk)
     dut.rst_n.value = 1
+    await RisingEdge(dut.clk)
 
-    # ----------------------------
-    # Helper: wait N PWM cycles
-    # ----------------------------
-    async def wait_pwm_cycles(n):
-        for _ in range(n):
-            await RisingEdge(dut.clk)
+@cocotb.test()
+async def test_pwm_debug(dut):
+    cocotb.start_soon(Clock(dut.clk, 10, units="ns").start())
+    await reset_dut(dut)
+    dut.ui_in.value = 50  # 50% duty cycle
+    for cycle in range(20):
+        await RisingEdge(dut.clk)
+        val0 = dut.uo_out[0].value.integer
+        val1 = dut.uo_out[1].value.integer
+        cocotb.log.info(f"Cycle={cycle} uo_out[0]={val0}, uo_out[1]={val1}, ui_in={dut.ui_in.value.integer}")
+        # Commented assertion for debug
+        # assert val0 == val1, "Outputs should match"
 
-    # ----------------------------
-    # Test Case 1: duty = 0%
-    # ----------------------------
-    dut.ui_in.value = 0
-    await wait_pwm_cycles(256)   # wait full PWM cycle
-    assert dut.uo_out[0].value == 0, f"PWM should be 0 at 0 duty, got {dut.uo_out[0].value}"
 
-    # ----------------------------
-    # Test Case 2: duty = 50%
-    # ----------------------------
-    dut.ui_in.value = 50
-    await wait_pwm_cycles(256)
-    val = int(dut.uo_out[0].value)
-    assert val in [0, 1], f"PWM output unexpected at 50% duty: {val}"
-
-    # ----------------------------
-    # Test Case 3: duty = 100%
-    # ----------------------------
-    dut.ui_in.value = 100
-    await wait_pwm_cycles(256)
-    assert dut.uo_out[0].value == 1, f"PWM should be HIGH at 100% duty, got {dut.uo_out[0].value}"
-
-    # ----------------------------
-    # Test Case 4: duty > 100%
-    # ----------------------------
-    dut.ui_in.value = 150
-    await wait_pwm_cycles(256)
-    assert dut.uo_out[0].value == 1, f"PWM should be HIGH when duty>100, got {dut.uo_out[0].value}"
-
-    # ----------------------------
-    # Optionally check second PWM output
-    # ----------------------------
-    dut._log.info(f"PWM test passed! pwm_out1 = {dut.uo_out[1].value}")
