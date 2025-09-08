@@ -10,7 +10,9 @@ module pwm (
     reg [7:0] count;
     wire [7:0] threshold;
 
-    assign threshold = (dc * 255) / 100;
+    assign threshold = (dc == 0) ? 0 :
+                       (dc >= 100) ? 255 :
+                       (dc * 255) / 100;
 
     always @(posedge clk or negedge reset) begin
         if (!reset) begin
@@ -54,7 +56,6 @@ module tt_um_TT06_pwm (
     wire pwm_out;
     wire pwm_out1;
 
-    // Internal PWM module
     pwm pwm_inst (
         .clk(clk),
         .reset(reset),
@@ -68,7 +69,6 @@ module tt_um_TT06_pwm (
     assign uo_out[1] = pwm_out1;
     assign uo_out[7:2] = 0;
 
-    // Not using bidirectional IOs
     assign uio_out = 8'b0;
     assign uio_oe  = 8'b0;
     wire _unused = &{ui_in[7], uio_in[7:0], ena};
