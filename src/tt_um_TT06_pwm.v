@@ -8,11 +8,16 @@ module pwm (
     output reg pwm_out1
 );
     reg [7:0] count;
-    wire [7:0] threshold;
+    reg [7:0] threshold;
 
-    assign threshold = (dc == 0) ? 0 :
-                       (dc >= 100) ? 255 :
-                       (dc * 255) / 100;
+    always @* begin
+        if (dc == 0)
+            threshold = 0;
+        else if (dc >= 100)
+            threshold = 255;
+        else
+            threshold = (dc * 255) / 100;
+    end
 
     always @(posedge clk or negedge reset) begin
         if (!reset) begin
