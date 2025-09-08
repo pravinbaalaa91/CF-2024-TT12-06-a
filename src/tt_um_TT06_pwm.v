@@ -1,15 +1,16 @@
 `default_nettype none
 
 module pwm (
-    input clk,
-    input reset,
-    input wire [6:0] dc,
-    output reg pwm_out,
-    output reg pwm_out1
+    input  wire clk,
+    input  wire reset,
+    input  wire [6:0] dc,
+    output reg  pwm_out,
+    output reg  pwm_out1
 );
     reg [7:0] count;
     reg [7:0] threshold;
 
+    // Safe threshold calculation
     always @* begin
         if (dc == 0)
             threshold = 0;
@@ -22,19 +23,19 @@ module pwm (
     always @(posedge clk or negedge reset) begin
         if (!reset) begin
             count <= 8'd0;
-            pwm_out <= 0;
-            pwm_out1 <= 0;
+            pwm_out <= 1'b0;
+            pwm_out1 <= 1'b0;
         end else begin
-            count <= count + 1;
-            if (threshold == 0) begin
-                pwm_out <= 0;
-            end else if (dc >= 7'd100) begin
-                pwm_out <= 1;
-            end else if (count <= threshold) begin
-                pwm_out <= 1;
-            end else begin
-                pwm_out <= 0;
-            end
+            count <= count + 1'b1;
+            if (threshold == 0)
+                pwm_out <= 1'b0;
+            else if (dc >= 7'd100)
+                pwm_out <= 1'b1;
+            else if (count <= threshold)
+                pwm_out <= 1'b1;
+            else
+                pwm_out <= 1'b0;
+
             pwm_out1 <= pwm_out;
         end
     end
@@ -65,7 +66,7 @@ module tt_um_TT06_pwm (
 
     assign uo_out[0] = pwm_out;
     assign uo_out[1] = pwm_out1;
-    assign uo_out[7:2] = 0;
+    assign uo_out[7:2] = 6'b0;
 
     assign uio_out = 8'b0;
     assign uio_oe  = 8'b0;
