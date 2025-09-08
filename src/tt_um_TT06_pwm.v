@@ -21,7 +21,6 @@ module pwm (
             pwm_out1 <= 0;
         end else begin
             count <= count + 1;
-
             if (threshold == 0) begin
                 pwm_out <= 0;
             end else if (dc >= 7'd100) begin
@@ -31,7 +30,6 @@ module pwm (
             end else begin
                 pwm_out <= 0;
             end
-
             pwm_out1 <= pwm_out;
         end
     end
@@ -47,11 +45,7 @@ module tt_um_TT06_pwm (
     output wire [7:0] uio_oe,
     input  wire ena
 );
-
-    // Active-low reset → convert to active-high
     wire reset = ~rst_n;
-
-    // Duty cycle from ui_in[6:0]
     wire [6:0] dc = ui_in[6:0];
     wire pwm_out;
     wire pwm_out1;
@@ -64,7 +58,6 @@ module tt_um_TT06_pwm (
         .pwm_out1(pwm_out1)
     );
 
-    // Map outputs
     assign uo_out[0] = pwm_out;
     assign uo_out[1] = pwm_out1;
     assign uo_out[7:2] = 0;
@@ -72,5 +65,4 @@ module tt_um_TT06_pwm (
     assign uio_out = 8'b0;
     assign uio_oe  = 8'b0;
     wire _unused = &{ui_in[7], uio_in[7:0], ena};
-
 endmodule
